@@ -4,7 +4,7 @@ mod models;
 use anyhow::{Context, Result};
 use clap::Parser;
 use http_client::build_authenticated_client;
-use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResponse};
+use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResult};
 use reqwest::Client;
 
 /// Download and generate an EPUB from Safari Books Online.
@@ -22,21 +22,7 @@ struct Args {
     preserve_log: bool,
 }
 
-/// Fetches book metadata from the search endpoint.
-async fn fetch_metadata(client: &Client, bookid: &str) -> Result<SearchResponse> {
-    let url = format!("https://learning.oreilly.com/api/v2/search/?query={bookid}&limit=1");
-    let response = client
-        .get(&url)
-        .send()
-        .await?
-        .error_for_status()?
-        .json::<SearchResponse>()
-        .await
-        .context("Failed to deserialize Search API response.")?;
-    Ok(response)
-}
-
-/// Fetches EPUB structural data (like the chapters URL)
+/// Fetches EPUB structural data (like the chapters URL).
 async fn fetch_epub_data(client: &Client, bookid: &str) -> Result<EpubResponse> {
     let url = format!("https://learning.oreilly.com/api/v2/epubs/urn:orm:book:{bookid}/");
     let response = client
@@ -92,8 +78,12 @@ async fn main() -> Result<()> {
 
     println!("Fetching book metadata...");
     // Fetch from the search API.
-    let search_data = fetch_metadata(&client, &args.bookid).await?;
-    if let Some(book) = search_data.results.first() {
+    let search_url = format!(
+        "https://learning.oreilly.com/api/v2/search/?query={}",
+        args.bookid
+    );
+    let search_data: Vec<SearchResult> = fetch_all_pages(&client, search_url).await?;
+    if let Some(book) = search_data.first() {
         println!("\n--- Book Found ---");
         println!("Title: {}", book.title);
         println!("Authors: {}", book.authors.join(", "));
