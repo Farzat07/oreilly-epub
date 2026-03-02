@@ -821,6 +821,7 @@ dependencies = [
  "anyhow",
  "clap",
  "reqwest",
+ "serde",
  "serde_json",
  "tokio",
 ]
