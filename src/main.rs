@@ -4,7 +4,7 @@ mod models;
 use anyhow::{Context, Result};
 use clap::Parser;
 use http_client::build_authenticated_client;
-use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResult};
+use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResult, SpineItem, TocNode};
 use reqwest::Client;
 
 /// Download and generate an EPUB from Safari Books Online.
@@ -33,6 +33,22 @@ async fn fetch_epub_data(client: &Client, bookid: &str) -> Result<EpubResponse> 
         .json::<EpubResponse>()
         .await
         .context("Failed to deserialize EPUB API response")?;
+    Ok(response)
+}
+
+/// Fetches a direct array endpoint (no pagination, simple list).
+async fn fetch_direct_array<T>(client: &Client, url: &str) -> Result<Vec<T>>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let response = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Vec<T>>()
+        .await
+        .context("Failed to deserialize API response")?;
     Ok(response)
 }
 
@@ -102,6 +118,8 @@ async fn main() -> Result<()> {
     println!("Fetching book structure...");
     let chapters: Vec<Chapter> = fetch_all_pages(&client, epub_data.chapters.clone()).await?;
     let file_entries: Vec<FileEntry> = fetch_all_pages(&client, epub_data.files.clone()).await?;
+    let spine_items: Vec<SpineItem> = fetch_all_pages(&client, epub_data.spine.clone()).await?;
+    let toc_vec: Vec<TocNode> = fetch_direct_array(&client, &epub_data.table_of_contents).await?;
 
     Ok(())
 }

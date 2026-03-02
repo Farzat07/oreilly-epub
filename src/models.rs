@@ -20,8 +20,10 @@ pub struct SearchResult {
 #[derive(Debug, Deserialize)]
 pub struct EpubResponse {
     pub publication_date: String,
-    pub chapters: String, // This is a URL to the chapters list
-    pub files: String,    // This is a URL to the resource files
+    pub chapters: String,          // This is a URL to the chapters list
+    pub files: String,             // This is a URL to the resource files
+    pub spine: String,             // This is a URL to the spine list
+    pub table_of_contents: String, // This is a URL to the table of contents
 }
 
 /// Model for chapters API.
@@ -41,4 +43,23 @@ pub struct FileEntry {
     pub filename: String,
     pub filename_ext: String,
     pub kind: String,
+}
+
+/// Model for spine API.
+#[derive(Debug, Deserialize)]
+pub struct SpineItem {
+    pub ourn: String,
+    pub reference_id: String,
+    pub title: String,
+}
+
+/// Model for table of contents API.
+#[derive(Debug, Deserialize)]
+pub struct TocNode {
+    pub depth: u32,
+    pub reference_id: String,
+    pub ourn: String,
+    pub fragment: String,
+    pub title: String,
+    pub children: Vec<TocNode>,
 }
