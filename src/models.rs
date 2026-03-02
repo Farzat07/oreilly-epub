@@ -23,3 +23,30 @@ pub struct EpubResponse {
     pub chapters: String, // This is a URL to the chapters list
     pub files: String,    // This is a URL to the resource files
 }
+
+// --- Generic Model for paginated API ---
+
+#[derive(Debug, serde::Deserialize)]
+pub struct Paginated<T> {
+    pub next: Option<String>,
+    pub results: Vec<T>,
+}
+
+/// Model for chapters API.
+#[derive(Debug, Deserialize)]
+pub struct Chapter {
+    pub ourn: String,
+    pub is_skippable: bool,
+}
+
+/// Model for files API.
+#[derive(Debug, Deserialize)]
+pub struct FileEntry {
+    pub ourn: String,
+    pub url: String,
+    pub full_path: String,
+    pub media_type: String,
+    pub filename: String,
+    pub filename_ext: String,
+    pub kind: String,
+}
