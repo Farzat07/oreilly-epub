@@ -1,11 +1,12 @@
 use crate::models::FileEntry;
 use anyhow::Result;
 use reqwest::Client;
-use std::path::Path;
+use std::{io::Write, path::Path};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
 };
+use zip::{CompressionMethod, ZipWriter, write::FileOptions};
 
 /// Creates and writes container.xml.
 pub async fn write_container_xml(dest_root: &Path, opf_full_path: &str) -> Result<()> {
@@ -56,5 +57,18 @@ pub async fn download_all_files(
 
         file.write_all(&bytes).await?;
     }
+    Ok(())
+}
+
+/// Creates the EPUB archive (creates zip and includes all files in it).
+pub fn create_epub_archive(epub_root: &Path, output_epub: &Path) -> Result<()> {
+    let out_file = std::fs::File::create(output_epub)?;
+    let mut zip = ZipWriter::new(out_file);
+
+    let mimetype_options: FileOptions<()> =
+        FileOptions::default().compression_method(CompressionMethod::Stored);
+    zip.start_file("mimetype", mimetype_options)?;
+    zip.write_all(b"application/epub+zip")?;
+
     Ok(())
 }
