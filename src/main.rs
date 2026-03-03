@@ -1,12 +1,15 @@
+mod epub;
 mod http_client;
 mod models;
 
 use std::collections::HashMap;
+use std::path::Path;
 
+use crate::epub::download_all_files;
+use crate::http_client::build_authenticated_client;
+use crate::models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
-use http_client::build_authenticated_client;
-use models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
 use reqwest::Client;
 
 /// Download and generate an EPUB from Safari Books Online.
@@ -114,6 +117,10 @@ async fn main() -> Result<()> {
         .iter()
         .find(|f| f.filename_ext == ".opf" && f.media_type == "application/oebps-package+xml")
         .context("No OPF file with the correct MIME type was found.")?;
+
+    let dest_root = format!("Books/{}/epub_root", args.bookid);
+    let dest_root = Path::new(&dest_root);
+    download_all_files(&client, &file_entries, dest_root).await?;
 
     // Sanity check: Every entry in spine exists in chapters.
     let chapters: HashMap<String, Chapter> =
