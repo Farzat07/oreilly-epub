@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use http_client::build_authenticated_client;
-use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResult, SpineItem, TocNode};
+use models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
 use reqwest::Client;
 
 /// Download and generate an EPUB from Safari Books Online.
@@ -95,24 +95,10 @@ async fn main() -> Result<()> {
     let client = build_authenticated_client(&args.cookies)?;
 
     println!("Fetching book metadata...");
-    // Fetch from the search API.
-    let search_url = format!(
-        "https://learning.oreilly.com/api/v2/search/?query={}",
-        args.bookid
-    );
-    let search_data: Vec<SearchResult> = fetch_all_pages(&client, search_url).await?;
-    if let Some(book) = search_data.first() {
-        println!("\n--- Book Found ---");
-        println!("Title: {}", book.title);
-        println!("Authors: {}", book.authors.join(", "));
-        println!("Publisher: {}", book.publishers.join(", "));
-        println!("Cover URL: {}", book.cover_url);
-    } else {
-        anyhow::bail!("Could not find book metadata for ID: {}", args.bookid);
-    }
     // Fetch from the EPUB API.
     let epub_data = fetch_epub_data(&client, &args.bookid).await?;
     println!("Publication date: {}", epub_data.publication_date);
+    println!("Title: {}", epub_data.title);
     println!("Chapters URL: {}", epub_data.chapters);
     println!("Resources URL: {}", epub_data.files);
     println!("------------------\n");

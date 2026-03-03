@@ -7,19 +7,11 @@ pub struct Paginated<T> {
     pub results: Vec<T>,
 }
 
-/// Model for the Search API.
-#[derive(Debug, Deserialize)]
-pub struct SearchResult {
-    pub title: String,
-    pub authors: Vec<String>,
-    pub publishers: Vec<String>,
-    pub cover_url: String,
-}
-
 /// Model for the EPUB API.
 #[derive(Debug, Deserialize)]
 pub struct EpubResponse {
     pub publication_date: String,
+    pub title: String,
     pub chapters: String,          // This is a URL to the chapters list
     pub files: String,             // This is a URL to the resource files
     pub spine: String,             // This is a URL to the spine list
