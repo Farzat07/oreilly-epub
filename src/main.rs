@@ -5,7 +5,7 @@ mod models;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::epub::download_all_files;
+use crate::epub::{download_all_files, write_mimetype};
 use crate::http_client::build_authenticated_client;
 use crate::models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
 use anyhow::{Context, Result, ensure};
@@ -121,6 +121,7 @@ async fn main() -> Result<()> {
     let dest_root = format!("Books/{}/epub_root", args.bookid);
     let dest_root = Path::new(&dest_root);
     download_all_files(&client, &file_entries, dest_root).await?;
+    write_mimetype(dest_root).await?;
 
     // Sanity check: Every entry in spine exists in chapters.
     let chapters: HashMap<String, Chapter> =

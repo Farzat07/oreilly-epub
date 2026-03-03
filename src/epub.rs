@@ -7,6 +7,14 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
+/// Creates and writes the mimetype. Assumes dest_root already exists.
+pub async fn write_mimetype(dest_root: &Path) -> Result<()> {
+    let dest_path = dest_root.join("mimetype");
+    let mut file = File::create(dest_path).await?;
+    file.write_all(b"application/epub+zip").await?;
+    Ok(())
+}
+
 pub async fn download_all_files(
     client: &Client,
     file_entries: &[FileEntry],
