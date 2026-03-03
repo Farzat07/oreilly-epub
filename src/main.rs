@@ -1,7 +1,9 @@
 mod http_client;
 mod models;
 
-use anyhow::{Context, Result};
+use std::collections::HashMap;
+
+use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use http_client::build_authenticated_client;
 use models::{Chapter, EpubResponse, FileEntry, Paginated, SearchResult, SpineItem, TocNode};
@@ -120,6 +122,25 @@ async fn main() -> Result<()> {
     let file_entries: Vec<FileEntry> = fetch_all_pages(&client, epub_data.files.clone()).await?;
     let spine_items: Vec<SpineItem> = fetch_all_pages(&client, epub_data.spine.clone()).await?;
     let toc_vec: Vec<TocNode> = fetch_direct_array(&client, &epub_data.table_of_contents).await?;
+
+    // Sanity check: Every entry in spine exists in chapters.
+    let chapters: HashMap<String, Chapter> =
+        chapters.into_iter().map(|c| (c.ourn.clone(), c)).collect();
+    for s in spine_items {
+        ensure!(chapters.contains_key(&s.ourn), "{} not in chapters", s.ourn);
+    }
+    // Sanity check: Every node in the ToC references a file entry.
+    let file_entries: HashMap<String, FileEntry> = file_entries
+        .into_iter()
+        .map(|f| (f.ourn.clone(), f))
+        .collect();
+    for i in toc_vec {
+        ensure!(
+            file_entries.contains_key(&i.ourn),
+            "{} not in files",
+            i.ourn
+        );
+    }
 
     Ok(())
 }
