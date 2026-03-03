@@ -5,7 +5,7 @@ mod models;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::epub::{download_all_files, write_container_xml};
+use crate::epub::{download_all_files,};
 use crate::http_client::build_authenticated_client;
 use crate::models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
 use anyhow::{Context, Result, ensure};
@@ -112,16 +112,9 @@ async fn main() -> Result<()> {
     let spine_items: Vec<SpineItem> = fetch_all_pages(&client, epub_data.spine.clone()).await?;
     let toc_vec: Vec<TocNode> = fetch_direct_array(&client, &epub_data.table_of_contents).await?;
 
-    // Find the OPF file entry to reference it in container.xml
-    let opf_entry = file_entries
-        .iter()
-        .find(|f| f.filename_ext == ".opf" && f.media_type == "application/oebps-package+xml")
-        .context("No OPF file with the correct MIME type was found.")?;
-
     let dest_root = format!("Books/{}/epub_root", args.bookid);
     let dest_root = Path::new(&dest_root);
     download_all_files(&client, &file_entries, dest_root).await?;
-    write_container_xml(dest_root, &opf_entry.full_path).await?;
 
     // Sanity check: Every entry in spine exists in chapters.
     let chapters: HashMap<String, Chapter> =
