@@ -109,6 +109,12 @@ async fn main() -> Result<()> {
     let spine_items: Vec<SpineItem> = fetch_all_pages(&client, epub_data.spine.clone()).await?;
     let toc_vec: Vec<TocNode> = fetch_direct_array(&client, &epub_data.table_of_contents).await?;
 
+    // Find the OPF file entry to reference it in container.xml
+    let opf_entry = file_entries
+        .iter()
+        .find(|f| f.filename_ext == ".opf" && f.media_type == "application/oebps-package+xml")
+        .context("No OPF file with the correct MIME type was found.")?;
+
     // Sanity check: Every entry in spine exists in chapters.
     let chapters: HashMap<String, Chapter> =
         chapters.into_iter().map(|c| (c.ourn.clone(), c)).collect();
