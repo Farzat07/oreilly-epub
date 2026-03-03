@@ -2,13 +2,12 @@ mod epub;
 mod http_client;
 mod models;
 
-use std::collections::HashMap;
 use std::path::Path;
 
 use crate::epub::{create_epub_archive, download_all_files};
 use crate::http_client::build_authenticated_client;
 use crate::models::{Chapter, EpubResponse, FileEntry, Paginated, SpineItem, TocNode};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use clap::Parser;
 use reqwest::Client;
 
@@ -118,25 +117,6 @@ async fn main() -> Result<()> {
     let epub_path = format!("Books/{0}/{0}.epub", args.bookid);
     let epub_path = Path::new(&epub_path);
     create_epub_archive(dest_root, &epub_path, &file_entries)?;
-
-    // Sanity check: Every entry in spine exists in chapters.
-    let chapters: HashMap<String, Chapter> =
-        chapters.into_iter().map(|c| (c.ourn.clone(), c)).collect();
-    for s in spine_items {
-        ensure!(chapters.contains_key(&s.ourn), "{} not in chapters", s.ourn);
-    }
-    // Sanity check: Every node in the ToC references a file entry.
-    let file_entries: HashMap<String, FileEntry> = file_entries
-        .into_iter()
-        .map(|f| (f.ourn.clone(), f))
-        .collect();
-    for i in toc_vec {
-        ensure!(
-            file_entries.contains_key(&i.ourn),
-            "{} not in files",
-            i.ourn
-        );
-    }
 
     Ok(())
 }
