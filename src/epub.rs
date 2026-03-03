@@ -7,6 +7,32 @@ use tokio::{
     io::AsyncWriteExt,
 };
 
+/// Creates and writes container.xml.
+pub async fn write_container_xml(dest_root: &Path, opf_full_path: &str) -> Result<()> {
+    // Create destination directory.
+    let dest_dir = dest_root.join("META-INF");
+    fs::create_dir_all(&dest_dir).await?;
+
+    // Create distination file.
+    let dest_path = dest_dir.join("container.xml");
+    let mut file = File::create(dest_path).await?;
+
+    // Prepare file contents.
+    let contents = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="{opf_full_path}" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>
+"#
+    );
+
+    // Write down the file.
+    file.write_all(contents.as_bytes()).await?;
+    Ok(())
+}
+
 /// Creates and writes the mimetype. Assumes dest_root already exists.
 pub async fn write_mimetype(dest_root: &Path) -> Result<()> {
     let dest_path = dest_root.join("mimetype");
