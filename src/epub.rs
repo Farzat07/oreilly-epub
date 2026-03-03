@@ -1,7 +1,10 @@
 use crate::models::FileEntry;
 use anyhow::{Context, Result};
 use reqwest::Client;
-use std::{io::Write, path::Path};
+use std::{
+    io::{Read, Write},
+    path::Path,
+};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
@@ -9,7 +12,10 @@ use tokio::{
 use zip::{CompressionMethod, ZipWriter, write::FileOptions};
 
 /// Creates and writes container.xml.
-fn write_container_xml_to_zip(zip: &mut ZipWriter<std::fs::File>, opf_full_path: &str) -> Result<()> {
+fn write_container_xml_to_zip(
+    zip: &mut ZipWriter<std::fs::File>,
+    opf_full_path: &str,
+) -> Result<()> {
     // Prepare file contents.
     let contents = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -76,6 +82,19 @@ pub fn create_epub_archive(
         .find(|f| f.filename_ext == ".opf" && f.media_type == "application/oebps-package+xml")
         .context("No OPF file with the correct MIME type was found.")?;
     write_container_xml_to_zip(&mut zip, &opf_entry.full_path)?;
+
+    // Add the rest of the files according to file_entries.
+    let options: FileOptions<()> =
+        FileOptions::default().compression_method(CompressionMethod::Deflated);
+    for entry in file_entries {
+        zip.start_file(&entry.full_path, options)?;
+        let mut src_file = std::fs::File::open(epub_root.join(&entry.full_path))?;
+        let mut buffer = Vec::new();
+        src_file.read_to_end(&mut buffer)?;
+        zip.write_all(&buffer)?;
+    }
+
+    zip.finish()?;
 
     Ok(())
 }
