@@ -1,7 +1,9 @@
-use crate::models::FileEntry;
+use crate::models::{Chapter, FileEntry};
 use anyhow::{Context, Result};
-use reqwest::Client;
+use relative_path::RelativePath;
+use reqwest::{Client, Url};
 use std::{
+    collections::HashMap,
     io::{Read, Write},
     path::Path,
 };
@@ -66,6 +68,7 @@ pub fn create_epub_archive(
     epub_root: &Path,
     output_epub: &Path,
     file_entries: &[FileEntry],
+    chapters: &HashMap<String, Chapter>,
 ) -> Result<()> {
     let out_file = std::fs::File::create(output_epub)?;
     let mut zip = ZipWriter::new(out_file);
@@ -83,6 +86,12 @@ pub fn create_epub_archive(
         .context("No OPF file with the correct MIME type was found.")?;
     write_container_xml_to_zip(&mut zip, &opf_entry.full_path)?;
 
+    // Prepare url path to local path mapping to clean xhtml files from external dependencies.
+    let url_to_local: HashMap<String, String> = file_entries
+        .iter()
+        .map(url_path_to_local)
+        .collect::<Result<HashMap<_, _>>>()?;
+
     // Add the rest of the files according to file_entries.
     let options: FileOptions<()> =
         FileOptions::default().compression_method(CompressionMethod::Deflated);
@@ -91,10 +100,31 @@ pub fn create_epub_archive(
         let mut src_file = std::fs::File::open(epub_root.join(&entry.full_path))?;
         let mut buffer = Vec::new();
         src_file.read_to_end(&mut buffer)?;
-        zip.write_all(&buffer)?;
+        if chapters.contains_key(&entry.ourn) {
+            let mut html = String::from_utf8(buffer)?;
+            let chapter_dir = RelativePath::new(&entry.full_path)
+                .parent()
+                .unwrap_or(RelativePath::new(""));
+            for (url_path, local_path) in &url_to_local {
+                let rel_path = chapter_dir
+                    .to_relative_path_buf()
+                    .relative(RelativePath::new(local_path));
+                html = html.replace(url_path, rel_path.as_str());
+            }
+            zip.write_all(html.as_bytes())?;
+        } else {
+            zip.write_all(&buffer)?;
+        }
     }
 
     zip.finish()?;
 
     Ok(())
+}
+
+/// Helper function. Maps FileEntry to (url path, full_path) pair.
+fn url_path_to_local(entry: &FileEntry) -> Result<(String, String)> {
+    let url = Url::parse(&entry.url).with_context(|| format!("Could not parse: {}", entry.url))?;
+    let url_path = url.path().to_string();
+    Ok((url_path, entry.full_path.clone()))
 }

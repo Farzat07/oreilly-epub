@@ -2,6 +2,7 @@ mod epub;
 mod http_client;
 mod models;
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::epub::{create_epub_archive, download_all_files};
@@ -107,6 +108,8 @@ async fn main() -> Result<()> {
 
     println!("Fetching book structure...");
     let chapters: Vec<Chapter> = fetch_all_pages(&client, epub_data.chapters.clone()).await?;
+    let chapters: HashMap<String, Chapter> =
+        chapters.into_iter().map(|c| (c.ourn.clone(), c)).collect();
     let file_entries: Vec<FileEntry> = fetch_all_pages(&client, epub_data.files.clone()).await?;
     let spine_items: Vec<SpineItem> = fetch_all_pages(&client, epub_data.spine.clone()).await?;
     let toc_vec: Vec<TocNode> = fetch_direct_array(&client, &epub_data.table_of_contents).await?;
@@ -116,7 +119,7 @@ async fn main() -> Result<()> {
     download_all_files(&client, &file_entries, dest_root).await?;
     let epub_path = format!("Books/{0}/{0}.epub", args.bookid);
     let epub_path = Path::new(&epub_path);
-    create_epub_archive(dest_root, &epub_path, &file_entries)?;
+    create_epub_archive(dest_root, epub_path, &file_entries, &chapters)?;
 
     Ok(())
 }
