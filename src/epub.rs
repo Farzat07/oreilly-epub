@@ -91,6 +91,11 @@ pub fn create_epub_archive(
         .iter()
         .map(|e| (e.url.path(), &e.full_path))
         .collect::<HashMap<_, _>>();
+    // Prepare url to local path mapping to insert related assets based on their URL.
+    let url_to_file = file_entries
+        .iter()
+        .map(|e| (&e.url, e))
+        .collect::<HashMap<_, _>>();
 
     // Add the rest of the files according to file_entries.
     let options: FileOptions<()> =
@@ -100,7 +105,13 @@ pub fn create_epub_archive(
         let mut src_file = std::fs::File::open(entry.full_path.to_path(epub_root))?;
         let mut buffer = Vec::new();
         src_file.read_to_end(&mut buffer)?;
-        if chapters.contains_key(&entry.ourn) {
+        if let Some(chapter) = chapters.get(&entry.ourn) {
+            let stylesheet_entries = chapter
+                .related_assets
+                .stylesheets
+                .iter()
+                .filter_map(|u| url_to_file.get(u))
+                .collect::<Vec<_>>();
             let mut html = String::from_utf8(buffer)?;
             let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
             for (url_path, local_path) in &url_path_to_local {

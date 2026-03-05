@@ -30,7 +30,7 @@ pub struct Chapter {
 
 /// Sub-model of Chapter - related_assets.
 #[derive(Debug, Deserialize)]
-struct ChapRelAssets {
+pub struct ChapRelAssets {
     pub stylesheets: Vec<Url>,
 }
 
