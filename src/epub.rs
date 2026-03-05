@@ -1,6 +1,6 @@
 use crate::models::{Chapter, FileEntry};
 use anyhow::{Context, Result};
-use relative_path::RelativePath;
+use relative_path::{RelativePath, RelativePathBuf};
 use reqwest::{Client, Url};
 use std::{
     collections::HashMap,
@@ -16,7 +16,7 @@ use zip::{CompressionMethod, ZipWriter, write::FileOptions};
 /// Creates and writes container.xml.
 fn write_container_xml_to_zip(
     zip: &mut ZipWriter<std::fs::File>,
-    opf_full_path: &str,
+    opf_full_path: &RelativePathBuf,
 ) -> Result<()> {
     // Prepare file contents.
     let contents = format!(
@@ -43,7 +43,7 @@ pub async fn download_all_files(
     dest_root: &Path,
 ) -> Result<()> {
     for entry in file_entries {
-        let dest_path = dest_root.join(&entry.full_path);
+        let dest_path = entry.full_path.to_path(dest_root);
 
         if let Some(parent_dir) = dest_path.parent() {
             fs::create_dir_all(parent_dir).await?;
@@ -87,7 +87,7 @@ pub fn create_epub_archive(
     write_container_xml_to_zip(&mut zip, &opf_entry.full_path)?;
 
     // Prepare url path to local path mapping to clean xhtml files from external dependencies.
-    let url_to_local: HashMap<String, String> = file_entries
+    let url_to_local = file_entries
         .iter()
         .map(url_path_to_local)
         .collect::<Result<HashMap<_, _>>>()?;
@@ -97,18 +97,14 @@ pub fn create_epub_archive(
         FileOptions::default().compression_method(CompressionMethod::Deflated);
     for entry in file_entries {
         zip.start_file(&entry.full_path, options)?;
-        let mut src_file = std::fs::File::open(epub_root.join(&entry.full_path))?;
+        let mut src_file = std::fs::File::open(entry.full_path.to_path(epub_root))?;
         let mut buffer = Vec::new();
         src_file.read_to_end(&mut buffer)?;
         if chapters.contains_key(&entry.ourn) {
             let mut html = String::from_utf8(buffer)?;
-            let chapter_dir = RelativePath::new(&entry.full_path)
-                .parent()
-                .unwrap_or(RelativePath::new(""));
+            let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
             for (url_path, local_path) in &url_to_local {
-                let rel_path = chapter_dir
-                    .to_relative_path_buf()
-                    .relative(RelativePath::new(local_path));
+                let rel_path = chapter_dir.relative(local_path);
                 html = html.replace(url_path, rel_path.as_str());
             }
             zip.write_all(html.as_bytes())?;
@@ -123,7 +119,7 @@ pub fn create_epub_archive(
 }
 
 /// Helper function. Maps FileEntry to (url path, full_path) pair.
-fn url_path_to_local(entry: &FileEntry) -> Result<(String, String)> {
+fn url_path_to_local(entry: &FileEntry) -> Result<(String, RelativePathBuf)> {
     let url = Url::parse(&entry.url).with_context(|| format!("Could not parse: {}", entry.url))?;
     let url_path = url.path().to_string();
     Ok((url_path, entry.full_path.clone()))
