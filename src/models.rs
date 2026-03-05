@@ -25,6 +25,13 @@ pub struct EpubResponse {
 pub struct Chapter {
     pub ourn: String,
     pub is_skippable: bool,
+    pub related_assets: ChapRelAssets,
+}
+
+/// Sub-model of Chapter - related_assets.
+#[derive(Debug, Deserialize)]
+struct ChapRelAssets {
+    pub stylesheets: Vec<Url>,
 }
 
 /// Model for files API.
