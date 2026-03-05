@@ -1,5 +1,6 @@
 use relative_path::RelativePathBuf;
 use serde::Deserialize;
+use url::Url;
 
 /// Generic Model for paginated API.
 #[derive(Debug, serde::Deserialize)]
@@ -30,7 +31,7 @@ pub struct Chapter {
 #[derive(Debug, Deserialize)]
 pub struct FileEntry {
     pub ourn: String,
-    pub url: String,
+    pub url: Url,
     pub full_path: RelativePathBuf,
     pub media_type: String,
     pub filename: String,

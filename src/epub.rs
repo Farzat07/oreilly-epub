@@ -1,7 +1,7 @@
 use crate::models::{Chapter, FileEntry};
 use anyhow::{Context, Result};
 use relative_path::{RelativePath, RelativePathBuf};
-use reqwest::{Client, Url};
+use reqwest::Client;
 use std::{
     collections::HashMap,
     io::{Read, Write},
@@ -51,7 +51,7 @@ pub async fn download_all_files(
 
         let mut file = File::create(dest_path).await?;
         let bytes = client
-            .get(&entry.url)
+            .get(entry.url.clone())
             .send()
             .await?
             .error_for_status()?
@@ -87,10 +87,10 @@ pub fn create_epub_archive(
     write_container_xml_to_zip(&mut zip, &opf_entry.full_path)?;
 
     // Prepare url path to local path mapping to clean xhtml files from external dependencies.
-    let url_to_local = file_entries
+    let url_path_to_local = file_entries
         .iter()
-        .map(url_path_to_local)
-        .collect::<Result<HashMap<_, _>>>()?;
+        .map(|e| (e.url.path(), &e.full_path))
+        .collect::<HashMap<_, _>>();
 
     // Add the rest of the files according to file_entries.
     let options: FileOptions<()> =
@@ -103,7 +103,7 @@ pub fn create_epub_archive(
         if chapters.contains_key(&entry.ourn) {
             let mut html = String::from_utf8(buffer)?;
             let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
-            for (url_path, local_path) in &url_to_local {
+            for (url_path, local_path) in &url_path_to_local {
                 let rel_path = chapter_dir.relative(local_path);
                 html = html.replace(url_path, rel_path.as_str());
             }
@@ -116,11 +116,4 @@ pub fn create_epub_archive(
     zip.finish()?;
 
     Ok(())
-}
-
-/// Helper function. Maps FileEntry to (url path, full_path) pair.
-fn url_path_to_local(entry: &FileEntry) -> Result<(String, RelativePathBuf)> {
-    let url = Url::parse(&entry.url).with_context(|| format!("Could not parse: {}", entry.url))?;
-    let url_path = url.path().to_string();
-    Ok((url_path, entry.full_path.clone()))
 }
