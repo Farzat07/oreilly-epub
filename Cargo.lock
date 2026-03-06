@@ -301,7 +301,7 @@ version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
- "litrs",
+ "litrs 1.0.0",
 ]
 
 [[package]]
@@ -767,6 +767,15 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
 name = "litrs"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5e54036fe321fd421e10d732f155734c4e4afd610dd556d9a82833ab3ee0bed"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
+name = "litrs"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
@@ -832,6 +841,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf97ec579c3c42f953ef76dbf8d55ac91fb219dde70e49aa4a6b7d74e9919050"
 
 [[package]]
+name = "ogrim"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9a9f13f20f041c757ade45879cb9c8a2f7fa069f7f106c1683436ace5f975b4"
+dependencies = [
+ "ogrim-macros",
+]
+
+[[package]]
+name = "ogrim-macros"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c178ca94f950c8be8f915ebe59c797e2bd855e21e848d4afe6caf0115f3903"
+dependencies = [
+ "litrs 0.4.2",
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -855,6 +884,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "ogrim",
  "quick-xml",
  "relative-path",
  "reqwest",

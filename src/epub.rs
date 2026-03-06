@@ -3,6 +3,7 @@ use crate::{
     xml::build_epub_chapter,
 };
 use anyhow::{Context, Result};
+use ogrim::xml;
 use relative_path::{RelativePath, RelativePathBuf};
 use reqwest::Client;
 use std::{
@@ -22,21 +23,20 @@ fn write_container_xml_to_zip(
     opf_full_path: &RelativePathBuf,
 ) -> Result<()> {
     // Prepare file contents.
-    let contents = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="{opf_full_path}" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>
-"#
+    let contents = xml!(
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+          <rootfiles>
+            <rootfile full-path={opf_full_path} media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
     );
 
     // Write down the file.
     let options: FileOptions<()> =
         FileOptions::default().compression_method(CompressionMethod::Deflated);
     zip.start_file("META-INF/container.xml", options)?;
-    zip.write_all(contents.as_bytes())?;
+    zip.write_all(contents.as_str().as_bytes())?;
     Ok(())
 }
 
