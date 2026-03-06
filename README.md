@@ -97,7 +97,7 @@ most books; see Roadmap for planned streaming improvements).
 parsing to update `src`, `href`, and other attributes precisely.
 - [ ] **Stylesheets completeness**: ensure all CSS referenced by chapters is
 included and linked properly (cross-check chapters endpoint vs files list).
-- [ ] **License**: add a LICENSE file.
+- [ ] **License**: add copyright notice to each file and specify it in Cargo.toml.
 - [ ] **XDG directories**: use XDG‑compatible defaults for config and the
 download root.
 - [ ] **Concurrency**: implement parallel downloads with a configurable limit.
