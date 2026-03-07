@@ -4,7 +4,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Writer};
 use relative_path::{RelativePath, RelativePathBuf};
 use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{BufRead, Write};
 use url::Url;
 
 use crate::models::{Chapter, EpubResponse, FileEntry};
@@ -31,25 +31,50 @@ fn is_html_void_tag(name: &[u8]) -> bool {
 }
 
 /// Processes the fragment and outputs a complete, EPUB-ready XHTML document.
-pub fn build_epub_chapter(
+pub fn build_epub_chapter<R: BufRead, W: Write>(
     epub_data: &EpubResponse,
     chapter: &Chapter,
     chapter_dir: &RelativePath,
-    fragment: &str,
+    fragment_input: R,
     url_to_file: &HashMap<&Url, &FileEntry>,
     url_path_to_local: &HashMap<&str, &RelativePathBuf>,
-) -> Result<String> {
+    mut out: &mut W,
+) -> Result<()> {
+    // EPUB XHTML Boilerplate wrapper.
+    // EPUBs strictly require the w3 and idpf namespaces to validate properly.
+    let wrapper_xhtml = xml!(
+        <?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"
+            lang={epub_data.language} xml:lang={epub_data.language}>
+        <head>
+            <title>{chapter.title}</title>
+            {|doc| make_stylesheet_links(doc, chapter, chapter_dir, url_to_file)}
+        </head>
+        <body>
+        </body>
+        </html>
+    );
+    let wrapper_suffix = "</body></html>";
+    let wrapper_prefix = wrapper_xhtml
+        .as_str()
+        .strip_suffix(wrapper_suffix)
+        .context("Wrapper must end with </body></html>")?;
+
+    // Write wrapper prefix to output first.
+    out.write_all(wrapper_prefix.as_bytes())?;
+
     // Setup the XML Reader and Writer.
-    let mut reader = Reader::from_str(fragment);
+    let mut reader = Reader::from_reader(fragment_input);
     // Preserve spacing for EPUB text formatting.
     reader.config_mut().trim_text(false);
     // Fragments could have unmatched tags - tell the parser not to panic if so.
     reader.config_mut().check_end_names = false;
-    let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut writer = Writer::new(&mut out);
 
     // Loop through the XML events and rewrite tags.
+    let mut buffer = Vec::new();
     loop {
-        match reader.read_event() {
+        match reader.read_event_into(&mut buffer) {
             Ok(Event::Start(tag_data)) => {
                 // If it is a void tag, convert it to a self-closing XML tag.
                 let tag_type = if is_html_void_tag(tag_data.name().as_ref()) {
@@ -83,27 +108,10 @@ pub fn build_epub_chapter(
         }
     }
 
-    // Extract the modified fragment
-    let processed_fragment = String::from_utf8(writer.into_inner().into_inner())?;
+    // Finish by flushing wrapper suffix to output.
+    out.write_all(wrapper_suffix.as_bytes())?;
 
-    // Wrap in EPUB XHTML Boilerplate.
-    // EPUBs strictly require the w3 and idpf namespaces to validate properly.
-    let wrapper_xhtml = xml!(
-        <?xml version="1.0" encoding="UTF-8"?>
-        <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"
-            lang={epub_data.language} xml:lang={epub_data.language}>
-        <head>
-            <title>{chapter.title}</title>
-            {|doc| make_stylesheet_links(doc, chapter, chapter_dir, url_to_file)}
-        </head>
-        <body>
-        </body>
-        </html>
-    );
-    let wrapper_suffix = "</body></html>";
-    let wrapper_prefix = wrapper_xhtml.as_str().strip_suffix(wrapper_suffix).context("Wrapper must end with </body></html>")?;
-
-    Ok(format!("{}\n{}\n{}", wrapper_prefix, processed_fragment, wrapper_suffix))
+    Ok(())
 }
 
 /// Helper function add link elements for stylesheets to an xml Document.
