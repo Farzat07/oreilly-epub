@@ -138,13 +138,26 @@ fn rewrite_attributes<'a>(
     for attr in tag_data.attributes().filter_map(Result::ok) {
         let key = attr.key.as_ref();
 
-        // Intercept <img> tags with a "src" attribute.
-        if tag_data.name().as_ref() == b"img" && key == b"src" {
+        // Intercept element attributes which could contain links to resources.
+        if matches!(
+            (tag_data.name().as_ref(), key),
+            (b"img", b"src")
+                | (b"source", b"src")
+                | (b"video", b"src")
+                | (b"audio", b"src")
+                | (b"a", b"href")
+                | (b"link", b"href")
+                | (b"object", b"data")
+                | (b"embed", b"src")
+                | (b"iframe", b"src")
+                | (b"track", b"src")
+        ) {
             let url = String::from_utf8_lossy(&attr.value);
 
             // If we have a local path, inject it instead of the absolute URL.
             if let Some(local_path) = url_path_to_local.get(url.as_ref()) {
-                new_elem.push_attribute(("src", chapter_dir.relative(local_path).as_str()));
+                let key = String::from_utf8_lossy(key);
+                new_elem.push_attribute((key.as_ref(), chapter_dir.relative(local_path).as_str()));
                 continue;
             }
         }
