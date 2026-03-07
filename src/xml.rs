@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ogrim::{Document, xml};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Writer};
@@ -88,7 +88,7 @@ pub fn build_epub_chapter(
 
     // Wrap in EPUB XHTML Boilerplate.
     // EPUBs strictly require the w3 and idpf namespaces to validate properly.
-    let full_xhtml = xml!(
+    let wrapper_xhtml = xml!(
         <?xml version="1.0" encoding="UTF-8"?>
         <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"
             lang={epub_data.language} xml:lang={epub_data.language}>
@@ -97,12 +97,13 @@ pub fn build_epub_chapter(
             {|doc| make_stylesheet_links(doc, chapter, chapter_dir, url_to_file)}
         </head>
         <body>
-        {processed_fragment}
         </body>
         </html>
     );
+    let wrapper_suffix = "</body></html>";
+    let wrapper_prefix = wrapper_xhtml.as_str().strip_suffix(wrapper_suffix).context("Wrapper must end with </body></html>")?;
 
-    Ok(full_xhtml.into_string())
+    Ok(format!("{}\n{}\n{}", wrapper_prefix, processed_fragment, wrapper_suffix))
 }
 
 /// Helper function add link elements for stylesheets to an xml Document.
