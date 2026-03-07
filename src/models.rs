@@ -18,12 +18,14 @@ pub struct EpubResponse {
     pub files: String,             // This is a URL to the resource files
     pub spine: String,             // This is a URL to the spine list
     pub table_of_contents: String, // This is a URL to the table of contents
+    pub language: String,
 }
 
 /// Model for chapters API.
 #[derive(Debug, Deserialize)]
 pub struct Chapter {
     pub ourn: String,
+    pub title: String,
     pub is_skippable: bool,
     pub related_assets: ChapRelAssets,
 }

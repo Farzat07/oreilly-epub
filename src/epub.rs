@@ -1,4 +1,7 @@
-use crate::models::{Chapter, FileEntry};
+use crate::{
+    models::{Chapter, EpubResponse, FileEntry},
+    xml::build_epub_chapter,
+};
 use anyhow::{Context, Result};
 use relative_path::{RelativePath, RelativePathBuf};
 use reqwest::Client;
@@ -65,6 +68,7 @@ pub async fn download_all_files(
 
 /// Creates the EPUB archive (creates zip and includes all files in it).
 pub fn create_epub_archive(
+    epub_data: &EpubResponse,
     epub_root: &Path,
     output_epub: &Path,
     file_entries: &[FileEntry],
@@ -106,18 +110,29 @@ pub fn create_epub_archive(
         let mut buffer = Vec::new();
         src_file.read_to_end(&mut buffer)?;
         if let Some(chapter) = chapters.get(&entry.ourn) {
-            let stylesheet_entries = chapter
+            let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
+            let stylesheet_links = chapter
                 .related_assets
                 .stylesheets
                 .iter()
                 .filter_map(|u| url_to_file.get(u))
-                .collect::<Vec<_>>();
-            let mut html = String::from_utf8(buffer)?;
-            let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
-            for (url_path, local_path) in &url_path_to_local {
-                let rel_path = chapter_dir.relative(local_path);
-                html = html.replace(url_path, rel_path.as_str());
-            }
+                .map(|e| {
+                    format!(
+                        "<link rel=\"stylesheet\" type=\"{}\" href=\"{}\" />\n",
+                        e.media_type,
+                        chapter_dir.relative(&e.full_path)
+                    )
+                })
+                .collect::<String>();
+            let html = String::from_utf8(buffer)?;
+            let html = build_epub_chapter(
+                epub_data,
+                chapter,
+                chapter_dir,
+                &html,
+                &stylesheet_links,
+                &url_path_to_local,
+            )?;
             zip.write_all(html.as_bytes())?;
         } else {
             zip.write_all(&buffer)?;

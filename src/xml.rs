@@ -1,0 +1,137 @@
+use anyhow::Result;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::{Reader, Writer};
+use relative_path::{RelativePath, RelativePathBuf};
+use std::collections::HashMap;
+use std::io::Cursor;
+
+use crate::models::{Chapter, EpubResponse};
+
+/// Checks if a tag is a standard HTML void element that shouldn't have a closing tag.
+fn is_html_void_tag(name: &[u8]) -> bool {
+    matches!(
+        name,
+        b"area"
+            | b"base"
+            | b"br"
+            | b"col"
+            | b"embed"
+            | b"hr"
+            | b"img"
+            | b"input"
+            | b"link"
+            | b"meta"
+            | b"param"
+            | b"source"
+            | b"track"
+            | b"wbr"
+    )
+}
+
+/// Processes the fragment and outputs a complete, EPUB-ready XHTML document.
+pub fn build_epub_chapter(
+    epub_data: &EpubResponse,
+    chapter: &Chapter,
+    chapter_dir: &RelativePath,
+    fragment: &str,
+    stylesheet_path: &str,
+    url_path_to_local: &HashMap<&str, &RelativePathBuf>,
+) -> Result<String> {
+    // Setup the XML Reader and Writer.
+    let mut reader = Reader::from_str(fragment);
+    // Preserve spacing for EPUB text formatting.
+    reader.config_mut().trim_text(false);
+    // Fragments could have unmatched tags - tell the parser not to panic if so.
+    reader.config_mut().check_end_names = false;
+    let mut writer = Writer::new(Cursor::new(Vec::new()));
+
+    // Loop through the XML events and rewrite tags.
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(tag_data)) => {
+                // If it is a void tag, convert it to a self-closing XML tag.
+                let tag_type = if is_html_void_tag(tag_data.name().as_ref()) {
+                    Event::Empty
+                } else {
+                    Event::Start
+                };
+                writer.write_event(tag_type(rewrite_attributes(
+                    &tag_data,
+                    url_path_to_local,
+                    chapter_dir,
+                )))?;
+            }
+            Ok(Event::Empty(tag_data)) => {
+                // If tags are already empty, leave them as-is.
+                writer.write_event(Event::Empty(rewrite_attributes(
+                    &tag_data,
+                    url_path_to_local,
+                    chapter_dir,
+                )))?;
+            }
+            Ok(Event::End(tag_data)) => {
+                // Silently drop closing tags for void elements if they exist (e.g. <img></img>).
+                if !is_html_void_tag(tag_data.name().as_ref()) {
+                    writer.write_event(Event::End(tag_data))?;
+                }
+            }
+            Ok(Event::Eof) => break,
+            Ok(tag_data) => writer.write_event(tag_data)?, // Pass through text, comments, etc. unmodified.
+            Err(e) => anyhow::bail!(e),
+        }
+    }
+
+    // Extract the modified fragment
+    let processed_fragment = String::from_utf8(writer.into_inner().into_inner())?;
+
+    // Wrap in EPUB XHTML Boilerplate.
+    // EPUBs strictly require the w3 and idpf namespaces to validate properly.
+    let full_xhtml = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="{lang}" xml:lang="{lang}">
+<head>
+    <title>{title}</title>
+    {css}
+</head>
+<body>
+{content}
+</body>
+</html>"#,
+        lang = epub_data.language,
+        title = chapter.title,
+        css = stylesheet_path,
+        content = processed_fragment,
+    );
+
+    Ok(full_xhtml)
+}
+
+/// Helper function to inspect tags and rewrite the elements' attributes.
+fn rewrite_attributes<'a>(
+    tag_data: &BytesStart<'a>,
+    url_path_to_local: &HashMap<&str, &RelativePathBuf>,
+    chapter_dir: &RelativePath,
+) -> BytesStart<'static> {
+    let name = String::from_utf8_lossy(tag_data.name().as_ref()).into_owned();
+    let mut new_elem = BytesStart::new(name);
+
+    for attr in tag_data.attributes().filter_map(Result::ok) {
+        let key = attr.key.as_ref();
+
+        // Intercept <img> tags with a "src" attribute.
+        if tag_data.name().as_ref() == b"img" && key == b"src" {
+            let url = String::from_utf8_lossy(&attr.value);
+
+            // If we have a local path, inject it instead of the absolute URL.
+            if let Some(local_path) = url_path_to_local.get(url.as_ref()) {
+                new_elem.push_attribute(("src", chapter_dir.relative(local_path).as_str()));
+                continue;
+            }
+        }
+
+        // Keep all other attributes intact.
+        new_elem.push_attribute(attr);
+    }
+
+    new_elem
+}

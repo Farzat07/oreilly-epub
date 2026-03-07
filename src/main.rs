@@ -1,6 +1,7 @@
 mod epub;
 mod http_client;
 mod models;
+mod xml;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -119,7 +120,7 @@ async fn main() -> Result<()> {
     download_all_files(&client, &file_entries, dest_root).await?;
     let epub_path = format!("Books/{0}/{0}.epub", args.bookid);
     let epub_path = Path::new(&epub_path);
-    create_epub_archive(dest_root, epub_path, &file_entries, &chapters)?;
+    create_epub_archive(&epub_data, dest_root, epub_path, &file_entries, &chapters)?;
 
     Ok(())
 }
