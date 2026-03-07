@@ -111,26 +111,13 @@ pub fn create_epub_archive(
         src_file.read_to_end(&mut buffer)?;
         if let Some(chapter) = chapters.get(&entry.ourn) {
             let chapter_dir = entry.full_path.parent().unwrap_or(RelativePath::new(""));
-            let stylesheet_links = chapter
-                .related_assets
-                .stylesheets
-                .iter()
-                .filter_map(|u| url_to_file.get(u))
-                .map(|e| {
-                    format!(
-                        "<link rel=\"stylesheet\" type=\"{}\" href=\"{}\" />\n",
-                        e.media_type,
-                        chapter_dir.relative(&e.full_path)
-                    )
-                })
-                .collect::<String>();
             let html = String::from_utf8(buffer)?;
             let html = build_epub_chapter(
                 epub_data,
                 chapter,
                 chapter_dir,
                 &html,
-                &stylesheet_links,
+                &url_to_file,
                 &url_path_to_local,
             )?;
             zip.write_all(html.as_bytes())?;

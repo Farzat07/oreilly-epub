@@ -1,11 +1,13 @@
 use anyhow::Result;
+use ogrim::{Document, xml};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, Writer};
 use relative_path::{RelativePath, RelativePathBuf};
 use std::collections::HashMap;
 use std::io::Cursor;
+use url::Url;
 
-use crate::models::{Chapter, EpubResponse};
+use crate::models::{Chapter, EpubResponse, FileEntry};
 
 /// Checks if a tag is a standard HTML void element that shouldn't have a closing tag.
 fn is_html_void_tag(name: &[u8]) -> bool {
@@ -34,7 +36,7 @@ pub fn build_epub_chapter(
     chapter: &Chapter,
     chapter_dir: &RelativePath,
     fragment: &str,
-    stylesheet_path: &str,
+    url_to_file: &HashMap<&Url, &FileEntry>,
     url_path_to_local: &HashMap<&str, &RelativePathBuf>,
 ) -> Result<String> {
     // Setup the XML Reader and Writer.
@@ -86,24 +88,41 @@ pub fn build_epub_chapter(
 
     // Wrap in EPUB XHTML Boilerplate.
     // EPUBs strictly require the w3 and idpf namespaces to validate properly.
-    let full_xhtml = format!(
-        r#"<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="{lang}" xml:lang="{lang}">
-<head>
-    <title>{title}</title>
-    {css}
-</head>
-<body>
-{content}
-</body>
-</html>"#,
-        lang = epub_data.language,
-        title = chapter.title,
-        css = stylesheet_path,
-        content = processed_fragment,
+    let full_xhtml = xml!(
+        <?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"
+            lang={epub_data.language} xml:lang={epub_data.language}>
+        <head>
+            <title>{chapter.title}</title>
+            {|doc| make_stylesheet_links(doc, chapter, chapter_dir, url_to_file)}
+        </head>
+        <body>
+        {processed_fragment}
+        </body>
+        </html>
     );
 
-    Ok(full_xhtml)
+    Ok(full_xhtml.into_string())
+}
+
+/// Helper function add link elements for stylesheets to an xml Document.
+fn make_stylesheet_links(
+    doc: &mut Document,
+    chapter: &Chapter,
+    chapter_dir: &RelativePath,
+    url_to_file: &HashMap<&Url, &FileEntry>,
+) {
+    chapter
+        .related_assets
+        .stylesheets
+        .iter()
+        .filter_map(|u| url_to_file.get(u))
+        .for_each(|e| {
+            let rel_path = chapter_dir.relative(&e.full_path);
+            xml!(doc,
+                <link rel="stylesheet" type={e.media_type} href={rel_path} />
+            );
+        })
 }
 
 /// Helper function to inspect tags and rewrite the elements' attributes.
