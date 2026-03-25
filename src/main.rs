@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use crate::epub::{create_epub_archive, download_all_files};
 use crate::http_client::build_authenticated_client;
-use crate::models::{Chapter, EpubResponse, FileEntry, Paginated};
+use crate::models::{Chapter, DownloadConfig, EpubResponse, FileEntry, Paginated};
 use anyhow::{Context, Result, anyhow};
 use clap::{Parser, value_parser};
 use directories::{BaseDirs, UserDirs};
@@ -35,6 +35,22 @@ struct Args {
     /// Number of files to download in parallel. Limit is 8 (be polite).
     #[arg(long, value_parser=value_parser!(u32).range(1..=8), default_value_t = 4)]
     parallel: u32,
+    /// Ms to sleep between downloads
+    #[arg(long = "sleep-ms", default_value_t = 0)]
+    sleep_ms: u64,
+
+    /// Maximum retry attempts. If a file fails to download after this number of retries
+    /// the whole session is cancelled
+    #[arg(long = "max-retries", default_value_t = 3)]
+    max_retries: u32,
+
+    /// Sleep time between retry attempts. This is doubled for every retry for each file
+    #[arg(long = "retry-sleep-ms", default_value_t = 10000)]
+    retry_sleep_ms: u64,
+
+    /// Enable verbose logging
+    #[arg(long="verbose", default_value_t=false)]
+    verbose: bool
 }
 
 /// Fetches EPUB structural data (like the chapters URL).
@@ -139,11 +155,19 @@ async fn main() -> Result<()> {
     let epub_root = data_root.join("files").join(&args.bookid);
     if !args.skip_download {
         println!("Downloading files from the server...");
+        let config = DownloadConfig {
+            max_concurrent: args.parallel.try_into()?, // Will work as 1..=8 will fit into any usize.
+            sleep_ms: args.sleep_ms,
+            max_retries: args.max_retries,
+            retry_sleep_ms: args.retry_sleep_ms
+        };
+
         download_all_files(
             &client,
             &file_entries,
             &epub_root,
-            args.parallel.try_into()?, // Will work as 1..=8 will fit into any usize.
+            &config,
+            args.verbose
         )
         .await?;
     }
