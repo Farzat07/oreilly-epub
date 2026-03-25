@@ -54,3 +54,12 @@ pub struct FileEntry {
     pub media_type: String,
     pub filename_ext: String,
 }
+
+// Model for download configuration
+pub struct DownloadConfig
+{
+    pub max_concurrent: usize,
+    pub sleep_ms: u64,
+    pub max_retries: u32,
+    pub retry_sleep_ms: u64,
+}

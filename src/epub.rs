@@ -3,7 +3,7 @@
 // GNU General Public License, GPLv3, attached at the root of the project.
 
 use crate::{
-    models::{Chapter, EpubResponse, FileEntry},
+    models::{Chapter, EpubResponse, FileEntry, DownloadConfig},
     xml::{build_epub_chapter, write_modified_opf},
 };
 use anyhow::{Context, Result};
@@ -18,6 +18,7 @@ use std::{
 };
 use tokio::fs::{self, File};
 use tokio_util::io::StreamReader;
+use tokio::time::{Duration, sleep};
 use zip::{CompressionMethod, ZipWriter, write::FileOptions};
 
 /// Creates and writes container.xml.
@@ -42,14 +43,20 @@ pub async fn download_all_files(
     client: &Client,
     file_entries: &[FileEntry],
     dest_root: &Path,
-    max_concurrent: usize,
+    config: &DownloadConfig,
+    verbose: bool,
 ) -> Result<()> {
     let mut downloading = FuturesUnordered::new();
     let mut files_iter = file_entries.iter();
 
     // Start downloading the first n files.
-    for entry in files_iter.by_ref().take(max_concurrent) {
-        downloading.push(download_one_file(client, entry, dest_root));
+    for entry in files_iter.by_ref().take(config.max_concurrent) {
+        downloading.push(download_one_file(client,
+                                           entry,
+                                           dest_root,
+                                           config.max_retries,
+                                           config.retry_sleep_ms,
+                                           verbose));
     }
 
     // Obtain completed files from the list as they finish downloading, until empty.
@@ -58,7 +65,18 @@ pub async fn download_all_files(
         result?;
         // Refill the slot (if there are any remaining).
         if let Some(entry) = files_iter.next() {
-            downloading.push(download_one_file(client, entry, dest_root));
+            if config.sleep_ms > 0 {
+                if verbose {
+                    println!("Sleeping for {:.3}s ...", (config.sleep_ms as f32)/1000.0);
+                }
+                sleep(Duration::from_millis(config.sleep_ms)).await;
+            }
+            downloading.push(download_one_file(client,
+                                               entry,
+                                               dest_root,
+                                               config.max_retries,
+                                               config.retry_sleep_ms,
+                                               verbose));
         }
     }
 
@@ -70,28 +88,57 @@ pub async fn download_one_file(
     client: &Client,
     file_entry: &FileEntry,
     dest_root: &Path,
+    max_retries: u32,
+    retry_sleep_ms: u64,
+    verbose: bool
 ) -> Result<()> {
-    let dest_path = file_entry.full_path.to_path(dest_root);
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        if verbose {
+            println!("Downloading from {} (Attempt {}/{})", file_entry.url, attempts, max_retries);
+        }
 
-    // Ensure the directory exists and open the file.
-    if let Some(parent_dir) = dest_path.parent() {
-        fs::create_dir_all(parent_dir).await?;
+        let result = async {
+            let dest_path = file_entry.full_path.to_path(dest_root);
+
+            // Ensure the directory exists and open the file.
+            if let Some(parent_dir) = dest_path.parent() {
+                fs::create_dir_all(parent_dir).await?;
+            }
+            let mut file = File::create(dest_path).await?;
+
+            // Obtain the resource as a stream of bytes.
+            let bytes_stream = client
+                .get(file_entry.url.clone())
+                .send()
+                .await?
+                .error_for_status()?
+                .bytes_stream();
+            // Convert the bytes stream are fed to a reader. Must map errors to io errors.
+            let mut reader = StreamReader::new(bytes_stream.map_err(std::io::Error::other));
+            tokio::io::copy(&mut reader, &mut file).await?;
+            Result::<()>::Ok(())
+        }.await;
+
+        match result {
+            Ok(_) => {
+                if verbose {
+                    println!("Downloaded from {} to {:?}", file_entry.url, dest_root);
+                }
+                break Ok(());
+            },
+            Err(e) if attempts < max_retries => {
+                let backoff_ms = retry_sleep_ms * (2u64.pow(attempts -1));
+                eprintln!("Error downloading {}: {}. Retrying in {}ms...", file_entry.url, e, backoff_ms);
+                sleep(Duration::from_millis(backoff_ms)).await;
+            },
+            Err(e) => {
+                break Err(e.context(format!("Failed to download {} after {} attempts", file_entry.url,
+                                            max_retries)));
+            }
+        }
     }
-    let mut file = File::create(dest_path).await?;
-
-    // Obtain the resource as a stream of bytes.
-    let bytes_stream = client
-        .get(file_entry.url.clone())
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes_stream();
-    // Convert the bytes stream are fed to a reader. Must map errors to io errors.
-    let mut reader = StreamReader::new(bytes_stream.map_err(std::io::Error::other));
-
-    // Pipe bytes from the stream to the file.
-    tokio::io::copy(&mut reader, &mut file).await?;
-    Ok(())
 }
 
 /// Creates the EPUB archive (creates zip and includes all files in it).
