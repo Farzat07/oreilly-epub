@@ -67,9 +67,24 @@ Arguments:
   <BOOKID>  The Book digits ID that you want to download
 
 Options:
-      --cookies <COOKIES>    Path to the cookies.json file.
-      --skip-download        If files already downloaded in a previous run.
-      --parallel <PARALLEL>  Number of files to download in parallel.
+      --cookies <COOKIES>
+          Path to the cookies.json file
+      --skip-download
+          Do not download files. Use if they were already downloaded in a previous run
+      --parallel <PARALLEL>
+          Number of files to download in parallel. Limit is 8 (be polite) [default: 4]
+      --sleep-ms <SLEEP_MS>
+          Ms to sleep between downloads [default: 0]
+      --max-retries <MAX_RETRIES>
+          Maximum retry attempts. If a file fails to download after this number of retries the whole session is cancelled [default: 3]
+      --retry-sleep-ms <RETRY_SLEEP_MS>
+          Sleep time between retry attempts. This is doubled for every retry for each file [default: 10000]
+      --verbose
+          Enable verbose logging
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 **Example:**
@@ -134,7 +149,6 @@ This depends on the platform, as below:
 
 - This tool assumes the O'Reilly “files” API includes OPF/NCX and all
 referenced assets.
-- Concurrency is not enabled yet; downloads are sequential.
 
 ## Roadmap / TODO
 
