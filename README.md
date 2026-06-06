@@ -78,6 +78,8 @@ Options:
 oreilly-epub 9781787782204 --cookies ./cookies.json
 ```
 
+The EPUB file for the book will be placed in `$HOME/Downloads/oreilly-epub/<BOOKID>.epub`.
+
 Requires:
 
 - A **`cookies.json`** file for `learning.oreilly.com` (see below).
