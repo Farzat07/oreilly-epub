@@ -83,6 +83,16 @@ Requires:
 - A **`cookies.json`** file for `learning.oreilly.com` (see below).
 - Network access to O'Reilly's API while running the tool.
 
+### Download directory
+
+This depends on the platform, as below:
+
+|Platform|Value|Example|
+|--------|-----|-------|
+|Linux|`$XDG_DOWNLOAD_DIR`/oreilly-epub or `$HOME`/Downloads/oreilly-epub|/home/alice/Downloads/oreilly-epub|
+|macOS|`$HOME`/Downloads/oreilly-epub|/Users/Alice/Downloads/oreilly-epub|
+|Windows|`{FOLDERID_Downloads}`\oreilly-epub|C:\Users\Alice\Downloads\oreilly-epub|
+
 ### Cookies setup (`cookies.json`)
 
 Place a `cookies.json` file in the current working directory or config directory
